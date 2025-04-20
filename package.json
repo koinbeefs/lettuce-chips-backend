@@ -2,12 +2,13 @@
   "name": "lettuce-chips-backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "npm rebuild sqlite3"
   },
   "keywords": [],
-  "author": "",
+  "author": "Daxton Tabuan",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -15,5 +16,8 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
