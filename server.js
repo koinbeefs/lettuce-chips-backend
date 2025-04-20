@@ -60,10 +60,10 @@ db.serialize(() => {
     if (row.count === 0) {
       db.run(
         `INSERT INTO users (username, password, role) VALUES 
-        ('admin', 'admin', 'admin'), 
-        ('teofilo', 'teofilo', 'user'), 
-        ('daxton', 'daxton', 'user'), 
-        ('faith', 'faith', 'user')`
+        ('admin', 'admin123', 'admin'), 
+        ('teofilo', 'teofilo123', 'user'), 
+        ('daxton', 'daxton123', 'user'), 
+        ('faith', 'faith123', 'user')`
       );
     }
   });
@@ -113,19 +113,21 @@ app.put('/products/:id', (req, res) => {
 // Purchase details endpoint
 app.post('/purchase-details', (req, res) => {
   const { grams, quantity, totalCost } = req.body;
+  console.log('POST /purchase-details received:', req.body);
   if (!grams || !quantity || !totalCost) {
     return res.status(400).json({ error: 'Missing required fields: grams, quantity, totalCost' });
   }
-  // Ensure quantity is a number
   const parsedQuantity = Number(quantity);
   if (isNaN(parsedQuantity) || parsedQuantity < 1) {
     return res.status(400).json({ error: 'Invalid quantity: must be a number >= 1' });
   }
   purchaseDetails = { grams, quantity: parsedQuantity, totalCost };
+  console.log('Stored purchaseDetails:', purchaseDetails);
   res.json({ message: 'Purchase details saved' });
 });
 
 app.get('/purchase-details', (req, res) => {
+  console.log('GET /purchase-details returning:', purchaseDetails);
   res.json(purchaseDetails || {});
 });
 
@@ -139,40 +141,68 @@ app.get('/purchases_lettuce', (req, res) => {
 
 app.post('/purchases_lettuce', (req, res) => {
   const { grams, quantity, totalCost, purchaseDate } = req.body;
+  console.log('POST /purchases_lettuce received:', req.body); // Debug log
   if (!grams || !quantity || !totalCost || !purchaseDate) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    console.log('Validation failed: Missing fields');
+    return res.status(400).json({ error: 'Missing required fields: grams, quantity, totalCost, purchaseDate' });
+  }
+
+  const parsedQuantity = Number(quantity);
+  if (isNaN(parsedQuantity) || parsedQuantity < 1) {
+    console.log('Validation failed: Invalid quantity');
+    return res.status(400).json({ error: 'Invalid quantity: must be a number >= 1' });
   }
 
   db.get('SELECT * FROM products WHERE grams = ?', [grams], (err, product) => {
-    if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
-    if (!product) return res.status(404).json({ error: 'Product not found' });
-    if (product.quantity < quantity) return res.status(400).json({ error: 'Insufficient stock' });
+    if (err) {
+      console.log('Database error:', err.message);
+      return res.status(500).json({ error: 'Database error: ' + err.message });
+    }
+    if (!product) {
+      console.log('Validation failed: Product not found');
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    if (product.quantity < parsedQuantity) {
+      console.log('Validation failed: Insufficient stock', { available: product.quantity, requested: parsedQuantity });
+      return res.status(400).json({ error: `Insufficient stock: ${product.quantity} available` });
+    }
 
-    db.run('BEGIN TRANSACTION');
-    db.run(
-      `INSERT INTO purchases_lettuce (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
-      [grams, quantity, totalCost, purchaseDate],
-      function (err) {
-        if (err) {
-          db.run('ROLLBACK');
-          return res.status(500).json({ error: 'Database error: ' + err.message });
-        }
-        db.run(
-          `UPDATE products SET quantity = quantity - ? WHERE grams = ?`,
-          [quantity, grams],
-          function (err) {
-            if (err) {
-              db.run('ROLLBACK');
-              return res.status(500).json({ error: 'Database error: ' + err.message });
-            }
-            db.run('COMMIT', (err) => {
-              if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
-              res.json({ id: this.lastID });
-            });
-          }
-        );
+    db.run('BEGIN TRANSACTION', (err) => {
+      if (err) {
+        console.log('Transaction begin error:', err.message);
+        return res.status(500).json({ error: 'Database error: ' + err.message });
       }
-    );
+      db.run(
+        `INSERT INTO purchases_lettuce (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
+        [grams, parsedQuantity, totalCost, purchaseDate],
+        function (err) {
+          if (err) {
+            console.log('Insert error:', err.message);
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Database error: ' + err.message });
+          }
+          db.run(
+            `UPDATE products SET quantity = quantity - ? WHERE grams = ?`,
+            [parsedQuantity, grams],
+            function (err) {
+              if (err) {
+                console.log('Update error:', err.message);
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Database error: ' + err.message });
+              }
+              db.run('COMMIT', (err) => {
+                if (err) {
+                  console.log('Commit error:', err.message);
+                  return res.status(500).json({ error: 'Database error: ' + err.message });
+                }
+                console.log('Purchase completed:', { id: this.lastID });
+                res.json({ id: this.lastID, message: 'Purchase completed successfully' });
+              });
+            }
+          );
+        }
+      );
+    });
   });
 });
 
@@ -186,40 +216,68 @@ app.get('/purchases_other', (req, res) => {
 
 app.post('/purchases_other', (req, res) => {
   const { grams, quantity, totalCost, purchaseDate } = req.body;
+  console.log('POST /purchases_other received:', req.body);
   if (!grams || !quantity || !totalCost || !purchaseDate) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    console.log('Validation failed: Missing fields');
+    return res.status(400).json({ error: 'Missing required fields: grams, quantity, totalCost, purchaseDate' });
+  }
+
+  const parsedQuantity = Number(quantity);
+  if (isNaN(parsedQuantity) || parsedQuantity < 1) {
+    console.log('Validation failed: Invalid quantity');
+    return res.status(400).json({ error: 'Invalid quantity: must be a number >= 1' });
   }
 
   db.get('SELECT * FROM products WHERE grams = ?', [grams], (err, product) => {
-    if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
-    if (!product) return res.status(404).json({ error: 'Product not found' });
-    if (product.quantity < quantity) return res.status(400).json({ error: 'Insufficient stock' });
+    if (err) {
+      console.log('Database error:', err.message);
+      return res.status(500).json({ error: 'Database error: ' + err.message });
+    }
+    if (!product) {
+      console.log('Validation failed: Product not found');
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    if (product.quantity < parsedQuantity) {
+      console.log('Validation failed: Insufficient stock', { available: product.quantity, requested: parsedQuantity });
+      return res.status(400).json({ error: `Insufficient stock: ${product.quantity} available` });
+    }
 
-    db.run('BEGIN TRANSACTION');
-    db.run(
-      `INSERT INTO purchases_other (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
-      [grams, quantity, totalCost, purchaseDate],
-      function (err) {
-        if (err) {
-          db.run('ROLLBACK');
-          return res.status(500).json({ error: 'Database error: ' + err.message });
-        }
-        db.run(
-          `UPDATE products SET quantity = quantity - ? WHERE grams = ?`,
-          [quantity, grams],
-          function (err) {
-            if (err) {
-              db.run('ROLLBACK');
-              return res.status(500).json({ error: 'Database error: ' + err.message });
-            }
-            db.run('COMMIT', (err) => {
-              if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
-              res.json({ id: this.lastID });
-            });
-          }
-        );
+    db.run('BEGIN TRANSACTION', (err) => {
+      if (err) {
+        console.log('Transaction begin error:', err.message);
+        return res.status(500).json({ error: 'Database error: ' + err.message });
       }
-    );
+      db.run(
+        `INSERT INTO purchases_other (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
+        [grams, parsedQuantity, totalCost, purchaseDate],
+        function (err) {
+          if (err) {
+            console.log('Insert error:', err.message);
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Database error: ' + err.message });
+          }
+          db.run(
+            `UPDATE products SET quantity = quantity - ? WHERE grams = ?`,
+            [parsedQuantity, grams],
+            function (err) {
+              if (err) {
+                console.log('Update error:', err.message);
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Database error: ' + err.message });
+              }
+              db.run('COMMIT', (err) => {
+                if (err) {
+                  console.log('Commit error:', err.message);
+                  return res.status(500).json({ error: 'Database error: ' + err.message });
+                }
+                console.log('Purchase completed:', { id: this.lastID });
+                res.json({ id: this.lastID, message: 'Purchase completed successfully' });
+              });
+            }
+          );
+        }
+      );
+    });
   });
 });
 
