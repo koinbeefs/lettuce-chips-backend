@@ -7,7 +7,6 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Use a file-based SQLite database
 const dbPath = path.resolve(__dirname, 'database.sqlite');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
@@ -44,7 +43,6 @@ db.serialize(() => {
     role TEXT
   )`);
 
-  // Seed initial data only if tables are empty
   db.get(`SELECT COUNT(*) as count FROM users`, (err, row) => {
     if (row.count === 0) {
       db.run(`INSERT INTO users (username, password, role) VALUES ('admin', 'admin', 'admin'), ('teofilo', 'teofilo', 'user'), ('daxton', 'daxton', 'user'), ('faith', 'faith', 'user')`);
@@ -86,11 +84,43 @@ app.get('/purchases', (req, res) => {
 
 app.post('/purchases', (req, res) => {
   const { grams, quantity, totalCost, purchaseDate } = req.body;
-  db.run(`INSERT INTO purchases (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`, 
-    [grams, quantity, totalCost, purchaseDate], function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID });
-    });
+
+  if (!grams || !quantity || !totalCost || !purchaseDate) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  db.get('SELECT * FROM products WHERE grams = ?', [grams], (err, product) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+    if (product.quantity < quantity) return res.status(400).json({ error: 'Insufficient stock' });
+
+    db.run('BEGIN TRANSACTION');
+    db.run(
+      `INSERT INTO purchases (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
+      [grams, quantity, totalCost, purchaseDate],
+      function(err) {
+        if (err) {
+          db.run('ROLLBACK');
+          return res.status(500).json({ error: err.message });
+        }
+
+        db.run(
+          `UPDATE products SET quantity = quantity - ? WHERE grams = ?`,
+          [quantity, grams],
+          function(err) {
+            if (err) {
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: err.message });
+            }
+            db.run('COMMIT', (err) => {
+              if (err) return res.status(500).json({ error: err.message });
+              res.json({ id: this.lastID });
+            });
+          }
+        );
+      }
+    );
+  });
 });
 
 // User endpoints
