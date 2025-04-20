@@ -51,7 +51,6 @@ db.serialize(() => {
     role TEXT
   )`);
 
-  // Seed users
   db.get(`SELECT COUNT(*) as count FROM users`, (err, row) => {
     if (err) {
       console.error('Error checking users:', err.message);
@@ -141,16 +140,28 @@ app.get('/purchases_lettuce', (req, res) => {
 
 app.post('/purchases_lettuce', (req, res) => {
   const { grams, quantity, totalCost, purchaseDate } = req.body;
-  console.log('POST /purchases_lettuce received:', req.body); // Debug log
-  if (!grams || !quantity || !totalCost || !purchaseDate) {
-    console.log('Validation failed: Missing fields');
-    return res.status(400).json({ error: 'Missing required fields: grams, quantity, totalCost, purchaseDate' });
+  console.log('POST /purchases_lettuce received:', req.body);
+
+  // Validate fields
+  const missingFields = [];
+  if (!grams) missingFields.push('grams');
+  if (!quantity) missingFields.push('quantity');
+  if (!totalCost) missingFields.push('totalCost');
+  if (!purchaseDate) missingFields.push('purchaseDate');
+  if (missingFields.length > 0) {
+    console.log('Validation failed: Missing fields', missingFields);
+    return res.status(400).json({ error: `Missing required fields: ${missingFields.join(', ')}` });
   }
 
   const parsedQuantity = Number(quantity);
   if (isNaN(parsedQuantity) || parsedQuantity < 1) {
-    console.log('Validation failed: Invalid quantity');
+    console.log('Validation failed: Invalid quantity', { quantity });
     return res.status(400).json({ error: 'Invalid quantity: must be a number >= 1' });
+  }
+
+  if (isNaN(Number(totalCost)) || Number(totalCost) <= 0) {
+    console.log('Validation failed: Invalid totalCost', { totalCost });
+    return res.status(400).json({ error: 'Invalid totalCost: must be a number > 0' });
   }
 
   db.get('SELECT * FROM products WHERE grams = ?', [grams], (err, product) => {
@@ -159,7 +170,7 @@ app.post('/purchases_lettuce', (req, res) => {
       return res.status(500).json({ error: 'Database error: ' + err.message });
     }
     if (!product) {
-      console.log('Validation failed: Product not found');
+      console.log('Validation failed: Product not found', { grams });
       return res.status(404).json({ error: 'Product not found' });
     }
     if (product.quantity < parsedQuantity) {
@@ -174,7 +185,7 @@ app.post('/purchases_lettuce', (req, res) => {
       }
       db.run(
         `INSERT INTO purchases_lettuce (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
-        [grams, parsedQuantity, totalCost, purchaseDate],
+        [grams, parsedQuantity, Number(totalCost), purchaseDate],
         function (err) {
           if (err) {
             console.log('Insert error:', err.message);
@@ -193,6 +204,7 @@ app.post('/purchases_lettuce', (req, res) => {
               db.run('COMMIT', (err) => {
                 if (err) {
                   console.log('Commit error:', err.message);
+                  db.run('ROLLBACK');
                   return res.status(500).json({ error: 'Database error: ' + err.message });
                 }
                 console.log('Purchase completed:', { id: this.lastID });
@@ -217,15 +229,26 @@ app.get('/purchases_other', (req, res) => {
 app.post('/purchases_other', (req, res) => {
   const { grams, quantity, totalCost, purchaseDate } = req.body;
   console.log('POST /purchases_other received:', req.body);
-  if (!grams || !quantity || !totalCost || !purchaseDate) {
-    console.log('Validation failed: Missing fields');
-    return res.status(400).json({ error: 'Missing required fields: grams, quantity, totalCost, purchaseDate' });
+
+  const missingFields = [];
+  if (!grams) missingFields.push('grams');
+  if (!quantity) missingFields.push('quantity');
+  if (!totalCost) missingFields.push('totalCost');
+  if (!purchaseDate) missingFields.push('purchaseDate');
+  if (missingFields.length > 0) {
+    console.log('Validation failed: Missing fields', missingFields);
+    return res.status(400).json({ error: `Missing required fields: ${missingFields.join(', ')}` });
   }
 
   const parsedQuantity = Number(quantity);
   if (isNaN(parsedQuantity) || parsedQuantity < 1) {
-    console.log('Validation failed: Invalid quantity');
+    console.log('Validation failed: Invalid quantity', { quantity });
     return res.status(400).json({ error: 'Invalid quantity: must be a number >= 1' });
+  }
+
+  if (isNaN(Number(totalCost)) || Number(totalCost) <= 0) {
+    console.log('Validation failed: Invalid totalCost', { totalCost });
+    return res.status(400).json({ error: 'Invalid totalCost: must be a number > 0' });
   }
 
   db.get('SELECT * FROM products WHERE grams = ?', [grams], (err, product) => {
@@ -234,7 +257,7 @@ app.post('/purchases_other', (req, res) => {
       return res.status(500).json({ error: 'Database error: ' + err.message });
     }
     if (!product) {
-      console.log('Validation failed: Product not found');
+      console.log('Validation failed: Product not found', { grams });
       return res.status(404).json({ error: 'Product not found' });
     }
     if (product.quantity < parsedQuantity) {
@@ -249,7 +272,7 @@ app.post('/purchases_other', (req, res) => {
       }
       db.run(
         `INSERT INTO purchases_other (grams, quantity, totalCost, purchaseDate) VALUES (?, ?, ?, ?)`,
-        [grams, parsedQuantity, totalCost, purchaseDate],
+        [grams, parsedQuantity, Number(totalCost), purchaseDate],
         function (err) {
           if (err) {
             console.log('Insert error:', err.message);
@@ -268,6 +291,7 @@ app.post('/purchases_other', (req, res) => {
               db.run('COMMIT', (err) => {
                 if (err) {
                   console.log('Commit error:', err.message);
+                  db.run('ROLLBACK');
                   return res.status(500).json({ error: 'Database error: ' + err.message });
                 }
                 console.log('Purchase completed:', { id: this.lastID });
