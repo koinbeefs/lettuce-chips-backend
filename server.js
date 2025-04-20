@@ -3,7 +3,6 @@ const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const bcrypt = require('bcrypt');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,40 +51,24 @@ db.serialize(() => {
     role TEXT
   )`);
 
-  // Seed users with hashed passwords
-  const saltRounds = 10;
-  const users = [
-    { username: 'admin', password: 'admin123', role: 'admin' },
-    { username: 'teofilo', password: 'teofilo123', role: 'user' },
-    { username: 'daxton', password: 'daxton123', role: 'user' },
-    { username: 'faith', password: 'faith123', role: 'user' },
-  ];
-
+  // Seed users
   db.get(`SELECT COUNT(*) as count FROM users`, (err, row) => {
     if (err) {
       console.error('Error checking users:', err.message);
       return;
     }
     if (row.count === 0) {
-      users.forEach(({ username, password, role }) => {
-        bcrypt.hash(password, saltRounds, (err, hash) => {
-          if (err) {
-            console.error('Error hashing password:', err.message);
-            return;
-          }
-          db.run(
-            `INSERT INTO users (username, password, role) VALUES (?, ?, ?)`,
-            [username, hash, role],
-            (err) => {
-              if (err) console.error('Error seeding user:', err.message);
-            }
-          );
-        });
-      });
+      db.run(
+        `INSERT INTO users (username, password, role) VALUES 
+        ('admin', 'admin', 'admin'), 
+        ('teofilo', 'teofilo', 'user'), 
+        ('daxton', 'daxton', 'user'), 
+        ('faith', 'faith', 'user')`
+      );
     }
   });
 
-  // Seed products if empty
+  // Seed products
   db.get(`SELECT COUNT(*) as count FROM products`, (err, row) => {
     if (err) {
       console.error('Error checking products:', err.message);
@@ -265,16 +248,15 @@ app.post('/login', (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: 'Missing username or password' });
   }
-  db.get(`SELECT * FROM users WHERE username = ?`, [username], (err, row) => {
-    if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
-    if (!row) return res.status(401).json({ error: 'Invalid credentials' });
-
-    bcrypt.compare(password, row.password, (err, result) => {
-      if (err) return res.status(500).json({ error: 'Authentication error: ' + err.message });
-      if (!result) return res.status(401).json({ error: 'Invalid credentials' });
+  db.get(
+    `SELECT * FROM users WHERE username = ? AND password = ?`,
+    [username, password],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: 'Database error: ' + err.message });
+      if (!row) return res.status(401).json({ error: 'Invalid credentials' });
       res.json({ role: row.role });
-    });
-  });
+    }
+  );
 });
 
 app.post('/register', (req, res) => {
@@ -285,23 +267,19 @@ app.post('/register', (req, res) => {
   if (!['user', 'admin'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
   }
-
-  bcrypt.hash(password, 10, (err, hash) => {
-    if (err) return res.status(500).json({ error: 'Error hashing password: ' + err.message });
-    db.run(
-      `INSERT INTO users (username, password, role) VALUES (?, ?, ?)`,
-      [username, hash, role],
-      function (err) {
-        if (err) {
-          if (err.message.includes('UNIQUE constraint')) {
-            return res.status(409).json({ error: 'Username already exists' });
-          }
-          return res.status(500).json({ error: 'Database error: ' + err.message });
+  db.run(
+    `INSERT INTO users (username, password, role) VALUES (?, ?, ?)`,
+    [username, password, role],
+    function (err) {
+      if (err) {
+        if (err.message.includes('UNIQUE constraint')) {
+          return res.status(409).json({ error: 'Username already exists' });
         }
-        res.json({ id: this.lastID, message: 'User registered successfully' });
+        return res.status(500).json({ error: 'Database error: ' + err.message });
       }
-    );
-  });
+      res.json({ id: this.lastID, message: 'User registered successfully' });
+    }
+  );
 });
 
 app.listen(PORT, () => {
