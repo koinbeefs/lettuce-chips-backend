@@ -67,30 +67,6 @@ db.serialize(() => {
       );
     }
   });
-
-  // Seed products
-  db.get(`SELECT COUNT(*) as count FROM products`, (err, row) => {
-    if (err) {
-      console.error('Error checking products:', err.message);
-      return;
-    }
-    if (row.count === 0) {
-      const products = [
-        { grams: 50, price: 50.00, quantity: 100 },
-        { grams: 100, price: 80.00, quantity: 100 },
-        { grams: 250, price: 180.00, quantity: 100 },
-      ];
-      products.forEach(({ grams, price, quantity }) => {
-        db.run(
-          `INSERT INTO products (grams, price, quantity) VALUES (?, ?, ?)`,
-          [grams, price, quantity],
-          (err) => {
-            if (err) console.error('Error seeding product:', err.message);
-          }
-        );
-      });
-    }
-  });
 });
 
 // Temporary storage for purchase details
