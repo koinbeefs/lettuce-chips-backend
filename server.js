@@ -116,7 +116,12 @@ app.post('/purchase-details', (req, res) => {
   if (!grams || !quantity || !totalCost) {
     return res.status(400).json({ error: 'Missing required fields: grams, quantity, totalCost' });
   }
-  purchaseDetails = { grams, quantity, totalCost };
+  // Ensure quantity is a number
+  const parsedQuantity = Number(quantity);
+  if (isNaN(parsedQuantity) || parsedQuantity < 1) {
+    return res.status(400).json({ error: 'Invalid quantity: must be a number >= 1' });
+  }
+  purchaseDetails = { grams, quantity: parsedQuantity, totalCost };
   res.json({ message: 'Purchase details saved' });
 });
 
